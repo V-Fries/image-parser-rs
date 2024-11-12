@@ -1,4 +1,4 @@
 mod image;
-mod ppm;
+pub mod ppm;
 
 pub use image::Image;
