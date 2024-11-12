@@ -1,4 +1,7 @@
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    ops::{Index, IndexMut},
+};
 
 pub const DEFAULT_ALPHA_VALUE: u8 = 0;
 
@@ -50,6 +53,20 @@ impl Image {
 
     pub fn height(&self) -> usize {
         self.height
+    }
+}
+
+impl Index<usize> for Image {
+    type Output = Pixel;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.data[index]
+    }
+}
+
+impl IndexMut<usize> for Image {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.data[index]
     }
 }
 
