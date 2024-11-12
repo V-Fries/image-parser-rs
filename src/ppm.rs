@@ -6,7 +6,7 @@ use crate::{
     Image,
 };
 
-pub struct PpmFile<'a>(&'a str);
+pub struct PpmFile<'a>(pub &'a str);
 
 #[derive(Debug)]
 pub enum ImageFromPpmFileError {
