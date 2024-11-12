@@ -1,6 +1,6 @@
 use std::{
     fmt::Debug,
-    ops::{Index, IndexMut},
+    ops::{Deref, DerefMut, Index, IndexMut},
 };
 
 pub const DEFAULT_ALPHA_VALUE: u8 = 0;
@@ -53,6 +53,20 @@ impl Image {
 
     pub fn height(&self) -> usize {
         self.height
+    }
+}
+
+impl Deref for Image {
+    type Target = [Pixel];
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl DerefMut for Image {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }
 
