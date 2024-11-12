@@ -1,5 +1,8 @@
 use core::str;
-use std::{collections::TryReserveError, fs::File, io::Read, num::ParseIntError, str::Utf8Error};
+use std::{
+    collections::TryReserveError, error::Error, fmt::Display, fs::File, io::Read,
+    num::ParseIntError, str::Utf8Error,
+};
 
 use crate::{
     image::{Pixel, Rgba, DEFAULT_ALPHA_VALUE},
@@ -39,6 +42,14 @@ pub enum ImageFromPpmFileError {
     FailedToAllocateImageData(TryReserveError),
     LessThanSizePixelsFoundInFile,
 }
+
+impl Display for ImageFromPpmFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Error for ImageFromPpmFileError {}
 
 impl<'a> TryFrom<PpmFile<'a>> for Vec<Image> {
     type Error = ImageFromPpmFileError;
@@ -326,13 +337,13 @@ mod test {
         let res = parse_ppm_file(b"").unwrap_err();
         match res {
             ImageFromPpmFileError::FormatNotFound => {}
-            _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res}"),
         };
 
         let res = parse_ppm_file(b"                    ").unwrap_err();
         match res {
             ImageFromPpmFileError::FormatNotFound => {}
-            _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res}"),
         };
     }
 
@@ -341,19 +352,19 @@ mod test {
         let res = parse_ppm_file(b"").unwrap_err();
         match res {
             ImageFromPpmFileError::FormatNotFound => {}
-            _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res}"),
         };
 
         let res = parse_ppm_file(b"htre4 4 5 4654 ").unwrap_err();
         match res {
             ImageFromPpmFileError::FormatNotSupported => {}
-            _ => panic!("Expected ImageFromPpmFileError::FormatNotSupported found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::FormatNotSupported found {res}"),
         };
 
         let res = parse_ppm_file(b"htre4").unwrap_err();
         match res {
             ImageFromPpmFileError::NoWhitespaceAfterFormat => {}
-            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterFormat found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterFormat found {res}"),
         };
     }
 
@@ -362,43 +373,43 @@ mod test {
         let res = parse_ppm_file(b"P6 4f3 5 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::WidthIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 f 5 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::WidthIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42f 5 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::WidthIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 -42 5 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::WidthIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 99999999999999999999999999999 2 4 ").unwrap_err();
         match res {
             ImageFromPpmFileError::WidthIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42").unwrap_err();
         match res {
             ImageFromPpmFileError::NoWhitespaceAfterWidth => {}
-            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterWidth found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterWidth found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 ").unwrap_err();
         match res {
             ImageFromPpmFileError::WidthNotFound => {}
-            _ => panic!("Expected ImageFromPpmFileError::WidthNotFound found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::WidthNotFound found {res}"),
         };
     }
 
@@ -407,43 +418,43 @@ mod test {
         let res = parse_ppm_file(b"P6 5 4f3 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::HeightIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 f 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::HeightIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 42f 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::HeightIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 -42 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::HeightIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 99999999999999999999999999999 255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::HeightIsNotAUsize(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42 5").unwrap_err();
         match res {
             ImageFromPpmFileError::NoWhitespaceAfterHeight => {}
-            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterHeight found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterHeight found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42 ").unwrap_err();
         match res {
             ImageFromPpmFileError::HeightNotFound => {}
-            _ => panic!("Expected ImageFromPpmFileError::HeightNotFound found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::HeightNotFound found {res}"),
         };
     }
 
@@ -453,7 +464,7 @@ mod test {
         match res {
             ImageFromPpmFileError::WidthMulHeightOverflowsUsize => {}
             _ => {
-                panic!("Expected ImageFromPpmFileError::WidthMulHeightOverflowsUsize found {res:?}")
+                panic!("Expected ImageFromPpmFileError::WidthMulHeightOverflowsUsize found {res}")
             }
         };
 
@@ -466,7 +477,7 @@ mod test {
         let res = parse_ppm_file(format!("P6 {} 1 256 ", usize::MAX).as_bytes()).unwrap_err();
         match res {
             ImageFromPpmFileError::FailedToAllocateImageData(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::FailedToAllocateImageData found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::FailedToAllocateImageData found {res}"),
         };
     }
 
@@ -475,49 +486,49 @@ mod test {
         let res = parse_ppm_file(b"P6 4 2 2f55 ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalIsNotAU16(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 f ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalIsNotAU16(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 255f ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalIsNotAU16(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 -255 ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalIsNotAU16(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 999999999999999 ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalIsNotAU16(_) => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 255").unwrap_err();
         match res {
             ImageFromPpmFileError::NoWhitespaceAfterMaxval => {}
-            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterMaxval found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterMaxval found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalNotFound => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalNotFound found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalNotFound found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 0 ").unwrap_err();
         match res {
             ImageFromPpmFileError::MaxvalCantBe0 => {}
-            _ => panic!("Expected ImageFromPpmFileError::MaxvalCantBe0 found {res:?}"),
+            _ => panic!("Expected ImageFromPpmFileError::MaxvalCantBe0 found {res}"),
         };
     }
 
@@ -526,17 +537,17 @@ mod test {
         let res = parse_ppm_file(b"P6 1 1 255 rg").unwrap_err();
         match res {
             ImageFromPpmFileError::LessThanSizePixelsFoundInFile => {}
-            _ => panic!(
-                "Expected ImageFromPpmFileError::LessThanSizePixelsFoundInFile found {res:?}"
-            ),
+            _ => {
+                panic!("Expected ImageFromPpmFileError::LessThanSizePixelsFoundInFile found {res}")
+            }
         };
 
         let res = parse_ppm_file(b"P6 1 1 256 rrggb").unwrap_err();
         match res {
             ImageFromPpmFileError::LessThanSizePixelsFoundInFile => {}
-            _ => panic!(
-                "Expected ImageFromPpmFileError::LessThanSizePixelsFoundInFile found {res:?}"
-            ),
+            _ => {
+                panic!("Expected ImageFromPpmFileError::LessThanSizePixelsFoundInFile found {res}")
+            }
         };
     }
 
