@@ -12,7 +12,7 @@ use crate::{
 pub struct PpmFilePath<'a>(pub &'a str);
 
 #[derive(Debug)]
-pub enum ImagesFromPpmFileError {
+pub enum ParsingError {
     FailedToOpenFile(std::io::Error),
     FailedToReadFile(std::io::Error),
 
@@ -43,6 +43,22 @@ pub enum ImagesFromPpmFileError {
     LessThanSizePixelsFoundInFile,
 }
 
+impl Display for ParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Error for ParsingError {}
+
+#[derive(Debug)]
+pub struct ImagesFromPpmFileError {
+    #[allow(dead_code)]
+    parsing_error: ParsingError,
+    #[allow(dead_code)]
+    file_name: String,
+}
+
 impl Display for ImagesFromPpmFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -55,12 +71,21 @@ impl<'a> TryFrom<PpmFilePath<'a>> for Vec<Image> {
     type Error = ImagesFromPpmFileError;
 
     fn try_from(file_path: PpmFilePath) -> Result<Self, Self::Error> {
-        let mut file = File::open(file_path.0).map_err(ImagesFromPpmFileError::FailedToOpenFile)?;
+        let mut file = File::open(file_path.0).map_err(|err| ImagesFromPpmFileError {
+            parsing_error: ParsingError::FailedToOpenFile(err),
+            file_name: file_path.0.to_string(),
+        })?;
         let mut file_content = Vec::new();
         file.read_to_end(&mut file_content)
-            .map_err(ImagesFromPpmFileError::FailedToReadFile)?;
+            .map_err(|err| ImagesFromPpmFileError {
+                parsing_error: ParsingError::FailedToReadFile(err),
+                file_name: file_path.0.to_string(),
+            })?;
 
-        parse_ppm_file(&file_content)
+        parse_ppm_file(&file_content).map_err(|parsing_error| ImagesFromPpmFileError {
+            parsing_error,
+            file_name: file_path.0.to_string(),
+        })
     }
 }
 
@@ -75,11 +100,11 @@ impl<'a> TryFrom<PpmFilePath<'a>> for Image {
     }
 }
 
-fn parse_ppm_file(file_content: &[u8]) -> Result<Vec<Image>, ImagesFromPpmFileError> {
+fn parse_ppm_file(file_content: &[u8]) -> Result<Vec<Image>, ParsingError> {
     let mut images = Vec::new();
 
     if file_content.is_empty() {
-        return Err(ImagesFromPpmFileError::FormatNotFound);
+        return Err(ParsingError::FormatNotFound);
     }
 
     let mut cursor = 0;
@@ -97,51 +122,46 @@ fn parse_ppm_file(file_content: &[u8]) -> Result<Vec<Image>, ImagesFromPpmFileEr
     Ok(images)
 }
 
-fn parse_image(file_content: &[u8]) -> Result<(usize, Image), ImagesFromPpmFileError> {
-    let mut start =
-        get_content_start_index(file_content, 0).ok_or(ImagesFromPpmFileError::FormatNotFound)?;
-    let mut end = get_content_end_index(file_content, start)
-        .ok_or(ImagesFromPpmFileError::NoWhitespaceAfterFormat)?;
+fn parse_image(file_content: &[u8]) -> Result<(usize, Image), ParsingError> {
+    let mut start = get_content_start_index(file_content, 0).ok_or(ParsingError::FormatNotFound)?;
+    let mut end =
+        get_content_end_index(file_content, start).ok_or(ParsingError::NoWhitespaceAfterFormat)?;
     let format = &file_content[start..end];
 
-    start =
-        get_content_start_index(file_content, end).ok_or(ImagesFromPpmFileError::WidthNotFound)?;
-    end = get_content_end_index(file_content, start)
-        .ok_or(ImagesFromPpmFileError::NoWhitespaceAfterWidth)?;
+    start = get_content_start_index(file_content, end).ok_or(ParsingError::WidthNotFound)?;
+    end = get_content_end_index(file_content, start).ok_or(ParsingError::NoWhitespaceAfterWidth)?;
     let width = str::from_utf8(&file_content[start..end])
-        .map_err(ImagesFromPpmFileError::WidthIsNotAUtf8String)?
+        .map_err(ParsingError::WidthIsNotAUtf8String)?
         .parse::<usize>()
-        .map_err(ImagesFromPpmFileError::WidthIsNotAUsize)?;
+        .map_err(ParsingError::WidthIsNotAUsize)?;
 
-    start =
-        get_content_start_index(file_content, end).ok_or(ImagesFromPpmFileError::HeightNotFound)?;
-    end = get_content_end_index(file_content, start)
-        .ok_or(ImagesFromPpmFileError::NoWhitespaceAfterHeight)?;
+    start = get_content_start_index(file_content, end).ok_or(ParsingError::HeightNotFound)?;
+    end =
+        get_content_end_index(file_content, start).ok_or(ParsingError::NoWhitespaceAfterHeight)?;
     let height = str::from_utf8(&file_content[start..end])
-        .map_err(ImagesFromPpmFileError::HeightIsNotAUtf8String)?
+        .map_err(ParsingError::HeightIsNotAUtf8String)?
         .parse::<usize>()
-        .map_err(ImagesFromPpmFileError::HeightIsNotAUsize)?;
+        .map_err(ParsingError::HeightIsNotAUsize)?;
 
     let size = width
         .checked_mul(height)
-        .ok_or(ImagesFromPpmFileError::WidthMulHeightOverflowsUsize)?;
+        .ok_or(ParsingError::WidthMulHeightOverflowsUsize)?;
 
-    start =
-        get_content_start_index(file_content, end).ok_or(ImagesFromPpmFileError::MaxvalNotFound)?;
+    start = get_content_start_index(file_content, end).ok_or(ParsingError::MaxvalNotFound)?;
     end = find_index(file_content, start, |elem| (elem as char).is_whitespace())
-        .ok_or(ImagesFromPpmFileError::NoWhitespaceAfterMaxval)?;
+        .ok_or(ParsingError::NoWhitespaceAfterMaxval)?;
     let maxval = str::from_utf8(&file_content[start..end])
-        .map_err(ImagesFromPpmFileError::MaxvalIsNotAUtf8String)?
+        .map_err(ParsingError::MaxvalIsNotAUtf8String)?
         .parse::<u16>()
-        .map_err(ImagesFromPpmFileError::MaxvalIsNotAU16)?;
+        .map_err(ParsingError::MaxvalIsNotAU16)?;
     if maxval == 0 {
-        return Err(ImagesFromPpmFileError::MaxvalCantBe0);
+        return Err(ParsingError::MaxvalCantBe0);
     }
 
     start = end + 1;
     let (bytes_read, image) = match format {
         b"P6" => read_image(&file_content[start..], width, height, size, maxval)?,
-        _ => return Err(ImagesFromPpmFileError::FormatNotSupported),
+        _ => return Err(ParsingError::FormatNotSupported),
     };
     Ok((start + bytes_read, image))
 }
@@ -152,11 +172,11 @@ fn read_image(
     height: usize,
     size: usize,
     maxval: u16,
-) -> Result<(usize, Image), ImagesFromPpmFileError> {
+) -> Result<(usize, Image), ParsingError> {
     let mut image_data = Vec::<Pixel>::new();
     image_data
         .try_reserve_exact(size)
-        .map_err(ImagesFromPpmFileError::FailedToAllocateImageData)?;
+        .map_err(ParsingError::FailedToAllocateImageData)?;
 
     // TODO consider handling the case of maxval 255
     let bytes_read = if maxval < 256 {
@@ -173,14 +193,14 @@ fn read_image_from_u8_maxval(
     size: usize,
     maxval: u8,
     image_data: &mut Vec<Pixel>,
-) -> Result<usize, ImagesFromPpmFileError> {
+) -> Result<usize, ParsingError> {
     const SIZE_OF_U8_COLOR: usize = 3;
     let limit = size
         .checked_mul(SIZE_OF_U8_COLOR)
-        .ok_or(ImagesFromPpmFileError::SizeMulColorByteCountOverflows)?;
+        .ok_or(ParsingError::SizeMulColorByteCountOverflows)?;
 
     if raw_image_data.len() < limit {
-        return Err(ImagesFromPpmFileError::LessThanSizePixelsFoundInFile);
+        return Err(ParsingError::LessThanSizePixelsFoundInFile);
     }
 
     for i in (2..limit).step_by(SIZE_OF_U8_COLOR) {
@@ -202,14 +222,14 @@ fn read_image_from_u16_maxval(
     size: usize,
     maxval: u16,
     image_data: &mut Vec<Pixel>,
-) -> Result<usize, ImagesFromPpmFileError> {
+) -> Result<usize, ParsingError> {
     const SIZE_OF_U16_COLOR: usize = 6;
     let limit = size
         .checked_mul(SIZE_OF_U16_COLOR)
-        .ok_or(ImagesFromPpmFileError::SizeMulColorByteCountOverflows)?;
+        .ok_or(ParsingError::SizeMulColorByteCountOverflows)?;
 
     if raw_image_data.len() < limit {
-        return Err(ImagesFromPpmFileError::LessThanSizePixelsFoundInFile);
+        return Err(ParsingError::LessThanSizePixelsFoundInFile);
     }
 
     for i in (5..limit).step_by(SIZE_OF_U16_COLOR) {
@@ -347,13 +367,13 @@ mod test {
     fn empty_file() {
         let res = parse_ppm_file(b"").unwrap_err();
         match res {
-            ImagesFromPpmFileError::FormatNotFound => {}
+            ParsingError::FormatNotFound => {}
             _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res}"),
         };
 
         let res = parse_ppm_file(b"                    ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::FormatNotFound => {}
+            ParsingError::FormatNotFound => {}
             _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res}"),
         };
     }
@@ -362,19 +382,19 @@ mod test {
     fn bad_format() {
         let res = parse_ppm_file(b"").unwrap_err();
         match res {
-            ImagesFromPpmFileError::FormatNotFound => {}
+            ParsingError::FormatNotFound => {}
             _ => panic!("Expected ImageFromPpmFileError::FormatNotFound found {res}"),
         };
 
         let res = parse_ppm_file(b"htre4 4 5 4654 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::FormatNotSupported => {}
+            ParsingError::FormatNotSupported => {}
             _ => panic!("Expected ImageFromPpmFileError::FormatNotSupported found {res}"),
         };
 
         let res = parse_ppm_file(b"htre4").unwrap_err();
         match res {
-            ImagesFromPpmFileError::NoWhitespaceAfterFormat => {}
+            ParsingError::NoWhitespaceAfterFormat => {}
             _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterFormat found {res}"),
         };
     }
@@ -383,43 +403,43 @@ mod test {
     fn bad_width() {
         let res = parse_ppm_file(b"P6 4f3 5 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthIsNotAUsize(_) => {}
+            ParsingError::WidthIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 f 5 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthIsNotAUsize(_) => {}
+            ParsingError::WidthIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42f 5 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthIsNotAUsize(_) => {}
+            ParsingError::WidthIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 -42 5 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthIsNotAUsize(_) => {}
+            ParsingError::WidthIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 99999999999999999999999999999 2 4 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthIsNotAUsize(_) => {}
+            ParsingError::WidthIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::WidthIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42").unwrap_err();
         match res {
-            ImagesFromPpmFileError::NoWhitespaceAfterWidth => {}
+            ParsingError::NoWhitespaceAfterWidth => {}
             _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterWidth found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthNotFound => {}
+            ParsingError::WidthNotFound => {}
             _ => panic!("Expected ImageFromPpmFileError::WidthNotFound found {res}"),
         };
     }
@@ -428,43 +448,43 @@ mod test {
     fn bad_height() {
         let res = parse_ppm_file(b"P6 5 4f3 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::HeightIsNotAUsize(_) => {}
+            ParsingError::HeightIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 f 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::HeightIsNotAUsize(_) => {}
+            ParsingError::HeightIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 42f 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::HeightIsNotAUsize(_) => {}
+            ParsingError::HeightIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 -42 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::HeightIsNotAUsize(_) => {}
+            ParsingError::HeightIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 5 99999999999999999999999999999 255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::HeightIsNotAUsize(_) => {}
+            ParsingError::HeightIsNotAUsize(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::HeightIsNotAUsize found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42 5").unwrap_err();
         match res {
-            ImagesFromPpmFileError::NoWhitespaceAfterHeight => {}
+            ParsingError::NoWhitespaceAfterHeight => {}
             _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterHeight found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 42 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::HeightNotFound => {}
+            ParsingError::HeightNotFound => {}
             _ => panic!("Expected ImageFromPpmFileError::HeightNotFound found {res}"),
         };
     }
@@ -473,7 +493,7 @@ mod test {
     fn number_overflow() {
         let res = parse_ppm_file(format!("P6 {} 2 256 ", usize::MAX).as_bytes()).unwrap_err();
         match res {
-            ImagesFromPpmFileError::WidthMulHeightOverflowsUsize => {}
+            ParsingError::WidthMulHeightOverflowsUsize => {}
             _ => {
                 panic!("Expected ImageFromPpmFileError::WidthMulHeightOverflowsUsize found {res}")
             }
@@ -487,7 +507,7 @@ mod test {
     fn allocation_failure() {
         let res = parse_ppm_file(format!("P6 {} 1 256 ", usize::MAX).as_bytes()).unwrap_err();
         match res {
-            ImagesFromPpmFileError::FailedToAllocateImageData(_) => {}
+            ParsingError::FailedToAllocateImageData(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::FailedToAllocateImageData found {res}"),
         };
     }
@@ -496,49 +516,49 @@ mod test {
     fn bad_maxval() {
         let res = parse_ppm_file(b"P6 4 2 2f55 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalIsNotAU16(_) => {}
+            ParsingError::MaxvalIsNotAU16(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 f ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalIsNotAU16(_) => {}
+            ParsingError::MaxvalIsNotAU16(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 255f ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalIsNotAU16(_) => {}
+            ParsingError::MaxvalIsNotAU16(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 -255 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalIsNotAU16(_) => {}
+            ParsingError::MaxvalIsNotAU16(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 999999999999999 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalIsNotAU16(_) => {}
+            ParsingError::MaxvalIsNotAU16(_) => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalIsNotAU16 found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 255").unwrap_err();
         match res {
-            ImagesFromPpmFileError::NoWhitespaceAfterMaxval => {}
+            ParsingError::NoWhitespaceAfterMaxval => {}
             _ => panic!("Expected ImageFromPpmFileError::NoWhitespaceAfterMaxval found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalNotFound => {}
+            ParsingError::MaxvalNotFound => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalNotFound found {res}"),
         };
 
         let res = parse_ppm_file(b"P6 4 2 0 ").unwrap_err();
         match res {
-            ImagesFromPpmFileError::MaxvalCantBe0 => {}
+            ParsingError::MaxvalCantBe0 => {}
             _ => panic!("Expected ImageFromPpmFileError::MaxvalCantBe0 found {res}"),
         };
     }
@@ -547,7 +567,7 @@ mod test {
     fn not_enought_pixel_data() {
         let res = parse_ppm_file(b"P6 1 1 255 rg").unwrap_err();
         match res {
-            ImagesFromPpmFileError::LessThanSizePixelsFoundInFile => {}
+            ParsingError::LessThanSizePixelsFoundInFile => {}
             _ => {
                 panic!("Expected ImageFromPpmFileError::LessThanSizePixelsFoundInFile found {res}")
             }
@@ -555,7 +575,7 @@ mod test {
 
         let res = parse_ppm_file(b"P6 1 1 256 rrggb").unwrap_err();
         match res {
-            ImagesFromPpmFileError::LessThanSizePixelsFoundInFile => {}
+            ParsingError::LessThanSizePixelsFoundInFile => {}
             _ => {
                 panic!("Expected ImageFromPpmFileError::LessThanSizePixelsFoundInFile found {res}")
             }
