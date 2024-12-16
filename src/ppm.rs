@@ -67,7 +67,7 @@ impl Display for ImagesFromPpmFileError {
 
 impl Error for ImagesFromPpmFileError {}
 
-impl<'a> TryFrom<PpmFilePath<'a>> for Vec<Image> {
+impl TryFrom<PpmFilePath<'_>> for Vec<Image> {
     type Error = ImagesFromPpmFileError;
 
     fn try_from(file_path: PpmFilePath) -> Result<Self, Self::Error> {
@@ -89,7 +89,7 @@ impl<'a> TryFrom<PpmFilePath<'a>> for Vec<Image> {
     }
 }
 
-impl<'a> TryFrom<PpmFilePath<'a>> for Image {
+impl TryFrom<PpmFilePath<'_>> for Image {
     type Error = ImagesFromPpmFileError;
 
     fn try_from(file_path: PpmFilePath) -> Result<Self, Self::Error> {
